@@ -57,13 +57,6 @@ readligo/
 - **Package structure**: installable via `pip install -e .`, clean type
   annotations, Pylance-clean.
 
-## Next steps
-
-- [ ] Validate cleaning on multiple O3a files and bands
-- [ ] Add multi-file concatenation with consistent sample masks
-- [ ] Add unit tests for each preprocessing stage
-- [ ] Tune cleaning parameters (`nperseg`, `fap`, `bound`) across bands
-
 ## Conventions
 
 - Python 3.11, type-annotated, Pylance-clean

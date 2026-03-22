@@ -8,7 +8,7 @@ and removes transient artifacts via STFT-based cleaning.
 
 | Document | Purpose |
 |---|---|
-| [project_context.md](project_context.md) | Current status, key files, conventions, next steps |
+| [project_context.md](project_context.md) | Current status, key files, conventions |
 | [pipeline_architecture.md](pipeline_architecture.md) | Preprocessing data flow and module responsibilities |
 | [preprocessing.md](preprocessing.md) | Detailed preprocessing stages (DQ, heterodyne, STFT cleaning) |
 | [rendered/](rendered/) | PDFs and TeX source (cleaning_summary) |

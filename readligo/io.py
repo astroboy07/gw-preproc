@@ -77,9 +77,9 @@ def loaddata(
     tvec: bool = True,
     readstrain: bool = True,
 ) -> tuple[
-    npt.NDArray[np.float64] | None,
-    npt.NDArray[np.float64] | dict[str, float] | None,
-    dict[str, npt.NDArray[np.int32]] | None,
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64] | dict[str, float],
+    dict[str, npt.NDArray[np.int32]],
 ]:
     """Load LIGO data from HDF5 files.
 
@@ -93,11 +93,17 @@ def loaddata(
          unless the flag tvec=False. In that case, TIME is a
          dictionary of meta values.
     CHANNEL_DICT is a dictionary of data quality channels
+
+    Raises
+    ------
+    ValueError
+        If the file is empty or is not an HDF5 file.
     """
     # -- Check for zero length file
     filepath = Path(filename)
     if filepath.stat().st_size == 0:
-        return None, None, None
+        msg = f"File is empty: {filename}"
+        raise ValueError(msg)
 
     # -- Verify it's an HDF5 file
     if filepath.suffix.upper() != ".HDF5":

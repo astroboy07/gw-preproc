@@ -27,7 +27,7 @@ gps_times, cleaned, sample_mask, fs_new = process_band(
 
 See [`docs/README.md`](docs/README.md) for the full documentation hub, including:
 
-- [Project context](docs/project_context.md) — status, architecture, next steps
+- [Project context](docs/project_context.md) — status, architecture, conventions
 - [Pipeline architecture](docs/pipeline_architecture.md) — algorithm overview
 - [Preprocessing](docs/preprocessing.md) — detailed cleaning pipeline
 
