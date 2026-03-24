@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "apply_dq_mask",
     "clean_narrowband",
+    "data_loss_breakdown",
     "heterodyne_downsample",
     "plot_cleaning",
     "process_band",
@@ -263,6 +264,96 @@ def clean_narrowband(
     }
 
     return cleaned, sample_mask, diag
+
+
+def data_loss_breakdown(
+    sample_mask: np.ndarray,
+    dq_mask_1hz: np.ndarray,
+    diag: dict,
+    *,
+    bound: int = 10,
+) -> dict[str, int | float]:
+    """Classify masked samples into DQ-bad, STFT-boundary, and artifact loss.
+
+    Parameters
+    ----------
+    sample_mask
+        Per-sample boolean mask from :func:`clean_narrowband`.
+    dq_mask_1hz
+        Boolean DQ mask at 1 Hz from :func:`apply_dq_mask`.
+    diag
+        Diagnostics dict from :func:`clean_narrowband`.
+    bound
+        Column-hit threshold (must match the value used in cleaning).
+
+    Returns
+    -------
+    dict with keys:
+
+    - ``n_samples``: total number of samples.
+    - ``n_dq_loss``: samples lost because their DQ second is bad.
+    - ``n_boundary_loss``: DQ-good samples lost because their STFT window
+      straddles a DQ-bad region.
+    - ``n_artifact_loss``: DQ-good samples lost by the chi-squared
+      transient test.
+    - ``n_usable``: samples with ``sample_mask == True``.
+    - ``duty_factor``: fraction of usable samples.
+    """
+    good_cols = diag["good_cols"]
+    bad_col_mask = diag["bad_col_mask"]
+    col_hits = diag["col_hits"]
+    time_bins = diag["time_bins"]
+    fs_new = diag["fs_new"]
+    nperseg = len(diag["freq"])
+
+    n = len(sample_mask)
+
+    # Per-sample DQ mask at the downsampled rate
+    dq_sample = np.ones(n, dtype=bool)
+    sample_seconds = (np.arange(n) / fs_new).astype(int)
+    in_range = sample_seconds < len(dq_mask_1hz)
+    dq_sample[in_range] = dq_mask_1hz[sample_seconds[in_range]]
+    dq_sample[~in_range] = False
+
+    # Map each bad-column type to per-sample coverage
+    covered_by_dq_col = np.zeros(n, dtype=bool)
+    half = nperseg // 2
+    for i in range(len(bad_col_mask)):
+        if not bad_col_mask[i]:
+            continue
+        center = int(round(time_bins[i] * fs_new))
+        lo = max(0, center - half)
+        hi = min(n, center + half)
+        if not good_cols[i]:
+            covered_by_dq_col[lo:hi] = True
+
+    # Classify each masked sample
+    masked = ~sample_mask
+    dq_bad_samples = ~dq_sample
+    dq_loss = masked & dq_bad_samples
+    boundary_loss = masked & dq_sample & covered_by_dq_col
+    artifact_loss = masked & dq_sample & ~covered_by_dq_col
+
+    n_dq = int(np.sum(dq_loss))
+    n_boundary = int(np.sum(boundary_loss))
+    n_artifact = int(np.sum(artifact_loss))
+    n_usable = int(np.sum(sample_mask))
+
+    if n_dq + n_boundary + n_artifact != int(np.sum(masked)):
+        logger.warning(
+            "Loss categories (%d + %d + %d = %d) do not sum to total masked (%d)",
+            n_dq, n_boundary, n_artifact,
+            n_dq + n_boundary + n_artifact, int(np.sum(masked)),
+        )
+
+    return {
+        "n_samples": n,
+        "n_dq_loss": n_dq,
+        "n_boundary_loss": n_boundary,
+        "n_artifact_loss": n_artifact,
+        "n_usable": n_usable,
+        "duty_factor": n_usable / n if n > 0 else 0.0,
+    }
 
 
 def process_band(
