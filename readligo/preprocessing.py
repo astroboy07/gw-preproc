@@ -1,17 +1,21 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import signal, stats
+
+from .io import loaddata
+
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
     "apply_dq_mask",
     "clean_narrowband",
-    "data_loss_breakdown",
+    "data_loss_stats",
     "heterodyne_downsample",
     "plot_cleaning",
     "process_band",
@@ -266,7 +270,7 @@ def clean_narrowband(
     return cleaned, sample_mask, diag
 
 
-def data_loss_breakdown(
+def data_loss_stats(
     sample_mask: np.ndarray,
     dq_mask_1hz: np.ndarray,
     diag: dict,
@@ -342,9 +346,16 @@ def data_loss_breakdown(
     if n_dq + n_boundary + n_artifact != int(np.sum(masked)):
         logger.warning(
             "Loss categories (%d + %d + %d = %d) do not sum to total masked (%d)",
-            n_dq, n_boundary, n_artifact,
-            n_dq + n_boundary + n_artifact, int(np.sum(masked)),
+            n_dq,
+            n_boundary,
+            n_artifact,
+            n_dq + n_boundary + n_artifact,
+            int(np.sum(masked)),
         )
+    
+    # DQ duty factor
+    dq_mask_fs = np.repeat(dq_mask_1hz, 4096)
+    dq_duty_factor = 1-(np.sum(~dq_mask_fs)/len(dq_mask_fs))
 
     return {
         "n_samples": n,
@@ -353,6 +364,7 @@ def data_loss_breakdown(
         "n_artifact_loss": n_artifact,
         "n_usable": n_usable,
         "duty_factor": n_usable / n if n > 0 else 0.0,
+        "dq_duty_factor": dq_duty_factor
     }
 
 
@@ -367,7 +379,8 @@ def process_band(
     fap: float = 0.001,
     bound: int = 10,
     plot: bool = False,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
+    loss_stats: bool = False,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, float, dict[str, int | float] | None]:
     """Full single-file, single-band preprocessing pipeline.
 
     Chains :func:`heterodyne_downsample` and :func:`clean_narrowband`.
@@ -410,12 +423,16 @@ def process_band(
         fap=fap,
         bound=bound,
     )
+    gps_times = gps_start + np.arange(len(cleaned)) / fs_new
 
     if plot:
         plot_cleaning(narrowband, cleaned, diag, bound=bound)
+    
+    if loss_stats:
+        breakdown = data_loss_stats(sample_mask, dq_mask_1hz, diag, bound=bound)
+        return gps_times, cleaned, sample_mask, fs_new, breakdown
 
-    gps_times = gps_start + np.arange(len(cleaned)) / fs_new
-    return gps_times, cleaned, sample_mask, fs_new
+    return gps_times, cleaned, sample_mask, fs_new, None
 
 
 def plot_cleaning(
@@ -461,8 +478,9 @@ def plot_cleaning(
         vmin = vmax = None
 
     # 1) Normalised power spectrogram
-    axes[0].pcolormesh(time_bins, freq, sxx_scaled_db, shading="auto",
-                       vmin=vmin, vmax=vmax)
+    axes[0].pcolormesh(
+        time_bins, freq, sxx_scaled_db, shading="auto", vmin=vmin, vmax=vmax
+    )
     axes[0].set_ylabel("Freq (Hz)")
     axes[0].set_title(f"Normalised power (dB) — chi2 threshold = {threshold:.1f}")
 
